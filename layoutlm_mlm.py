@@ -1,13 +1,9 @@
 from torch.optim import Adam
-from transformers import AutoProcessor, LayoutLMv3Config
-
-from common_crawl_dataset import DataCollatorForLayoutPretraining
-from datapipe import get_datapipe
-from masking_generator import MaskingGenerator
-from modeling import LayoutLMv3ForPretraining
-
 from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService
-from torchdata.datapipes.iter import IterableWrapper, FSSpecFileOpener
+from transformers import LayoutLMv3Config
+
+from datapipe import get_datapipe
+from modeling import LayoutLMv3ForPretraining
 
 config = LayoutLMv3Config(
     # The pretrained LayoutLMv3 has max_position_embeddings=514 but the default for LayoutLMv3Config is 512. Because of
@@ -26,16 +22,13 @@ model = LayoutLMv3ForPretraining(config)
 
 url = 'gs://common-crawl-33-pdf-grouped-english'
 
-batch_size = 10
+batch_size = 4
 
 datapipe = get_datapipe(url, batch_size)
 
-processor = AutoProcessor.from_pretrained("microsoft/layoutlmv3-base", apply_ocr=False)
-
-rs = MultiProcessingReadingService(num_workers=0)
+rs = MultiProcessingReadingService(num_workers=2)
 
 dataloader = DataLoader2(datapipe=datapipe, reading_service=rs)
-
 opt = Adam(model.parameters())
 
 for encoding in dataloader:
