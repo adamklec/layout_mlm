@@ -32,14 +32,17 @@ datapipe = get_datapipe(url, batch_size)
 
 processor = AutoProcessor.from_pretrained("microsoft/layoutlmv3-base", apply_ocr=False)
 
-dataloader = DataLoader2(datapipe=datapipe)
+rs = MultiProcessingReadingService(num_workers=0)
+
+dataloader = DataLoader2(datapipe=datapipe, reading_service=rs)
 
 opt = Adam(model.parameters())
 
 for encoding in dataloader:
-    output = model(**encoding)
-    loss = output.mlm_loss + output.mim_loss + output.wpa_loss
-    opt.zero_grad()
-    loss.backward()
-    opt.step()
-    print(output)
+    print(encoding)
+    # output = model(**encoding)
+    # loss = output.mlm_loss + output.mim_loss + output.wpa_loss
+    # opt.zero_grad()
+    # loss.backward()
+    # opt.step()
+    # print(output)
