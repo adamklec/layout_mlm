@@ -10,7 +10,7 @@ from PIL import Image
 from torch.utils.data import functional_datapipe
 from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService
 from torchdata.datapipes.iter import IterableWrapper, FSSpecFileOpener, \
-    SampleMultiplexer, IterDataPipe
+    SampleMultiplexer, IterDataPipe, SampleMultiplexer, FSSpecFileLister
 
 from transformers import AutoProcessor
 
@@ -103,7 +103,6 @@ class BatchProcessor(IterDataPipe):
             wpa_labels = generate_wpa_labels(batch.bbox, upsampled_mim_mask, mlm_mask, IGNORE_LABEL)
             batch['wpa_labels'] = wpa_labels
 
-            image_tokens = np.array(image_tokens) # necessary?
             image_labels = torch.LongTensor(image_tokens)
             image_labels.masked_fill_(~mim_mask, IGNORE_LABEL)
             image_labels = image_labels.view(batch_size, -1)
@@ -116,32 +115,26 @@ class BatchProcessor(IterDataPipe):
             yield batch
 
 
+def demux_classifier(filename):
+    return int(filename.split('-')[-1].split('.')[0])
+
+
 def get_datapipe(url, batch_size):
-    dps = []
-    for filename in IterableWrapper([url]).list_files_by_fsspec():
-        dp = FSSpecFileOpener([filename], mode="rb", anon=True)
+
+    dps = FSSpecFileLister(url).demux(7793, demux_classifier, buffer_size=7793)
+    for i, _ in enumerate(dps):
+        dp = dps[i]
+        dp = dp.open_files_by_fsspec(mode="rb")
         dp = dp.load_from_tar(mode="r|")
         dp = dp.read_from_stream()
         dp = dp.webdataset()
-        dp = dp.map(create_page_example)
-        dps.append(dp)
+        dps[i] = dp
 
-    # TODO get weights from DB
     pipes_to_weights_dict = {dp: 1 / len(dps) for dp in dps}
-    data_pipe = SampleMultiplexer(pipes_to_weights_dict=pipes_to_weights_dict, seed=0)
-    data_pipe = data_pipe.set_length(DATASET_SIZE)
-    data_pipe = data_pipe.sharding_filter()  # is this the right place for this?
-    data_pipe = data_pipe.batch(batch_size)
-    data_pipe = data_pipe.process_batch()
+    datapipe = SampleMultiplexer(pipes_to_weights_dict=pipes_to_weights_dict, seed=0)
+    datapipe = datapipe.sharding_filter()
+    datapipe = datapipe.map(create_page_example)
+    datapipe = datapipe.batch(batch_size)
+    datapipe = datapipe.process_batch()
 
-    return data_pipe
-
-
-if __name__ == '__main__':
-    datapipe = get_datapipe('gs://common-crawl-33-pdf-grouped-english', 10)
-    # rs = MultiProcessingReadingService(num_workers=2)
-    dl = DataLoader2(datapipe=datapipe)
-    for j, batch in enumerate(dl):
-        for example in batch:
-            print(example['__key__'])
-
+    return datapipe

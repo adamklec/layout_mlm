@@ -32,10 +32,10 @@ dataloader = DataLoader2(datapipe=datapipe, reading_service=rs)
 opt = Adam(model.parameters())
 
 for encoding in dataloader:
-    print(encoding)
-    # output = model(**encoding)
-    # loss = output.mlm_loss + output.mim_loss + output.wpa_loss
-    # opt.zero_grad()
-    # loss.backward()
-    # opt.step()
-    # print(output)
+    print(encoding.data['doc_id'].tolist())
+    output = model(**encoding)
+    loss = output.mlm_loss + output.mim_loss + output.wpa_loss
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+    print(output)
