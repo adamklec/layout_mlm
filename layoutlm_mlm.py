@@ -1,9 +1,19 @@
+import torch
 from torch.optim import Adam
-from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService
+from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService, \
+    DistributedReadingService, SequentialReadingService
 from transformers import LayoutLMv3Config
 
 from datapipe import get_datapipe
 from modeling import LayoutLMv3ForPretraining
+
+USE_GPU = True
+# import horovod.torch as hvd
+#
+# hvd.init()
+#
+# if torch.cuda.is_available():
+#     torch.cuda.set_device(hvd.local_rank())
 
 config = LayoutLMv3Config(
     # The pretrained LayoutLMv3 has max_position_embeddings=514 but the default for LayoutLMv3Config is 512. Because of
@@ -19,6 +29,8 @@ config = LayoutLMv3Config(
 )
 config.codebook_size = 8192
 model = LayoutLMv3ForPretraining(config)
+if USE_GPU:
+    model = model.cuda()
 
 url = 'gs://common-crawl-33-pdf-grouped-english'
 
@@ -26,12 +38,18 @@ batch_size = 4
 
 datapipe = get_datapipe(url, batch_size)
 
-rs = MultiProcessingReadingService(num_workers=2)
+mp_rs = MultiProcessingReadingService(num_workers=2)
+# dist_rs = DistributedReadingService()
+# rs = SequentialReadingService(dist_rs, mp_rs)
 
-dataloader = DataLoader2(datapipe=datapipe, reading_service=rs)
+dataloader = DataLoader2(datapipe=datapipe, reading_service=mp_rs)
+
 opt = Adam(model.parameters())
+# optimizer = hvd.DistributedOptimizer(opt, named_parameters=model.named_parameters())
 
 for encoding in dataloader:
+    if USE_GPU:
+        encoding = encoding.to('cuda')
     print(encoding.data['doc_id'].tolist())
     output = model(**encoding)
     loss = output.mlm_loss + output.mim_loss + output.wpa_loss

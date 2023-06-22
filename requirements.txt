@@ -5,3 +5,4 @@ Pillow
 torchdata
 numpy
 gcsfs
+horovod

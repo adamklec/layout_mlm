@@ -8,10 +8,7 @@ import pandas as pd
 import torch
 from PIL import Image
 from torch.utils.data import functional_datapipe
-from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService
-from torchdata.datapipes.iter import IterableWrapper, FSSpecFileOpener, \
-    SampleMultiplexer, IterDataPipe, SampleMultiplexer, FSSpecFileLister
-
+from torchdata.datapipes.iter import IterDataPipe, SampleMultiplexer, FSSpecFileLister
 from transformers import AutoProcessor
 
 from common_crawl_dataset import make_mlm_mask, generate_wpa_labels
