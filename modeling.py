@@ -6,7 +6,6 @@ import torch.utils.checkpoint
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from transformers import LayoutLMv3PreTrainedModel, LayoutLMv3Model
 from transformers.activations import ACT2FN
-from transformers.models.layoutlmv3.modeling_layoutlmv3 import LayoutLMv3ClassificationHead
 from transformers.utils import logging, ModelOutput
 
 logger = logging.get_logger(__name__)
