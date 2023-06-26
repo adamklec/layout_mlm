@@ -1,4 +1,4 @@
-import torch
+import wandb
 from torch.optim import Adam
 from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService, \
     DistributedReadingService, SequentialReadingService
@@ -8,12 +8,7 @@ from datapipe import get_datapipe
 from modeling import LayoutLMv3ForPretraining
 
 USE_GPU = True
-# import horovod.torch as hvd
-#
-# hvd.init()
-#
-# if torch.cuda.is_available():
-#     torch.cuda.set_device(hvd.local_rank())
+NUM_EPOCHS = 10
 
 config = LayoutLMv3Config(
     # The pretrained LayoutLMv3 has max_position_embeddings=514 but the default for LayoutLMv3Config is 512. Because of
@@ -28,6 +23,14 @@ config = LayoutLMv3Config(
     patch_size=14
 )
 config.codebook_size = 8192
+
+run = wandb.init(
+    project='train_layoutlm',
+    job_type='train_model',
+    config=config.to_dict()
+)
+
+
 model = LayoutLMv3ForPretraining(config)
 if USE_GPU:
     model = model.cuda()
@@ -38,22 +41,34 @@ batch_size = 4
 
 datapipe = get_datapipe(url, batch_size)
 
-mp_rs = MultiProcessingReadingService(num_workers=2)
+mp_rs = MultiProcessingReadingService(num_workers=1)
 # dist_rs = DistributedReadingService()
 # rs = SequentialReadingService(dist_rs, mp_rs)
 
 dataloader = DataLoader2(datapipe=datapipe, reading_service=mp_rs)
 
 opt = Adam(model.parameters())
-# optimizer = hvd.DistributedOptimizer(opt, named_parameters=model.named_parameters())
 
-for encoding in dataloader:
-    if USE_GPU:
-        encoding = encoding.to('cuda')
-    print(encoding.data['doc_id'].tolist())
-    output = model(**encoding)
-    loss = output.mlm_loss + output.mim_loss + output.wpa_loss
-    opt.zero_grad()
-    loss.backward()
-    opt.step()
-    print(output)
+global_step = 0
+for epoch in range(NUM_EPOCHS):
+    for i, encoding in enumerate(dataloader):
+        if USE_GPU:
+            encoding = encoding.to('cuda')
+        print(i)
+        output = model(**encoding)
+        loss = output.mlm_loss + output.mim_loss + output.wpa_loss
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        if i % 10 == 0:
+            logs = {
+                'epoch': epoch,
+                'iter': i,
+                'mlm loss': float(output.mlm_loss),
+                'mim loss': float(output.mim_loss),
+                'wpa loss': float(output.wpa_loss),
+                'total loss': float(loss),
+            }
+            wandb.log(logs)
+

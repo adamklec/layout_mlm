@@ -6,3 +6,4 @@ torchdata
 numpy
 gcsfs
 horovod
+wandb

@@ -28,7 +28,7 @@ def create_page_example(doc_example):
     page_id = random.choice(page_ids)
     word_df = pd.read_json(BytesIO(doc_example[f'.{page_id}.word']))
     words = word_df.text.tolist()
-    boxes = word_df[['x', 'y', 'x2', 'y2']].to_numpy()
+    boxes = word_df[['x', 'y', 'x2', 'y2']].values.tolist()
     image = Image.open(BytesIO(doc_example[f'.{page_id}.png']))
     image_tokens = np.array(
         json.loads(doc_example[f'.{page_id}.image_tokens'])).reshape((16, 16))
@@ -61,6 +61,7 @@ class BatchProcessor(IterDataPipe):
                 image_tokens.append(example['image_tokens'])
                 doc_ids.append(example['doc_id'])
 
+            image_tokens = np.array(image_tokens)
             batch = self.processor(images, words, boxes=boxes, padding='max_length',
                                    truncation=True, return_tensors='pt')
 
@@ -118,7 +119,7 @@ def demux_classifier(filename):
 
 def get_datapipe(url, batch_size):
 
-    dps = FSSpecFileLister(url).demux(7793, demux_classifier, buffer_size=7793)
+    dps = FSSpecFileLister(url).demux(7793, demux_classifier, buffer_size=7793)[:1000]
     for i, _ in enumerate(dps):
         dp = dps[i]
         dp = dp.open_files_by_fsspec(mode="rb")
@@ -127,6 +128,7 @@ def get_datapipe(url, batch_size):
         dp = dp.webdataset()
         dps[i] = dp
 
+    # TODO: get weights from db
     pipes_to_weights_dict = {dp: 1 / len(dps) for dp in dps}
     datapipe = SampleMultiplexer(pipes_to_weights_dict=pipes_to_weights_dict, seed=0)
     datapipe = datapipe.sharding_filter()
